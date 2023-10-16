@@ -1,0 +1,5 @@
+.vscode
+*.ipynb
+*.pyc
+*.swp
+tmp/*

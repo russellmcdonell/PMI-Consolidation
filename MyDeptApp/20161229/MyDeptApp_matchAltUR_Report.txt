@@ -1,0 +1,23 @@
+Phase 1 Testing - matchAltUR
+_____ _ _______ _ __________
+MyDeptApp Patient Matched on AltUR number
+_________ _______ _______ __ _____ ______
+1444	with an AltUR number
+363	without an AltUR number
+1807	Total Patients
+
+1108	Records perfectly matched patients in MyPAS (MyDeptApp/20161229/MyDeptApp_ur_matched_'n'.xlsx)
+71	Records matched patients who have been merged to a patient with a different UR in MyPAS (MyDeptApp/20161229/MyDeptApp_ur_matched_merged.xlsx)
+72	Records matched patients who have an alias with a different UR in MyPAS (MyDeptApp/20161229/MyDeptApp_ur_matched_merged.xlsx)
+81	patients had a AltUR number not found in MyPAS (MyDeptApp/20161229/MyDeptApp_ur_undefined.xlsx)
+34	Records matched on AltUR/UR number, but not family name[family name sounds like matched]
+	[34 to be checked] (MyDeptApp/20161229/MyDeptApp_family_name_close_mismatch_ToDo.xlsx)
+176	Records matched on AltUR/UR number and family name, but not birth date
+	[176 to be checked] (MyDeptApp/20161229/MyDeptApp_dob_mismatch_ToDo.xlsx)
+9	Records matched on AltUR/UR number, family name and birth date, but not given name
+	[9 to be checked] (MyDeptApp/20161229/MyDeptApp_given_name_mismatch_ToDo.xlsx)
+6	Records matched on AltUR/UR number, family name, birth date and given name, but not sex
+	[6 to be checked] (MyDeptApp/20161229/MyDeptApp_sex_mismatch_ToDo.xlsx)
+
+NOTE: The last eight numbers should add up to the first
+

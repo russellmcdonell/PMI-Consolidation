@@ -1,0 +1,9 @@
+Phase 0 Testing - master PMI checks
+_____ _ _______ _ ______ ___ ______
+MyPAS PMI Status Report
+_____ ___ ______ ______
+2829	Records Read In
+	[121 Alias records, 150 Merged records, 0 Deleted records]
+2829	Records Output for further testing (Deleted and bad records are not output)
+34	Family names modified (for comparisions) (file MyPAS_FamilyNameCheck.xlsx)
+1	Probable duplicates [same name/dob/sex - different UR] (file MyPAS_ProbableDuplicates.xlsx)

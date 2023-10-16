@@ -1,0 +1,21 @@
+Phase 2 Testing - findUR
+_____ _ _______ _ ______
+MyDeptApp Patient Found in MyPAS
+_________ _______ _____ __ _____
+1807	MyDeptApp Patients Read In
+363	MyDeptApp Patients checked (patients without a AltUR number or without a valid AltUR)
+
+237	MyDeptApp patients could not be found in MyPAS
+		[237 to be checked - MyDeptApp/20161229/MyDeptApp_NotFound_ToDo.xlsx]
+3	MyDeptApp patients with more than one similar MyPAS patient found
+		[3 to be checked] (MyDeptApp/20161229/MyDeptApp_DuplicateSimilarFound_ToDo.xlsx)
+1	MyDeptApp patients found to be simliar to one MyPAS patient
+		mismatch on given name [surname, birthdate and sex match]
+		[1 to be checked] (MyDeptApp_SimilarFound_NotGivenName_ToDo.xlsx)
+122	MyDeptApp patients found to be similar to one MyPAS patient
+		mismatch on birthdate [surname, firstname and sex match]
+		[122 to be checked] (MyDeptApp_SimilarFound_NotBirthdate_ToDo.xlsx)
+
+NOTE: The last four numbers should add up to the second number
+
+
