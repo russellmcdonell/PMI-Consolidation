@@ -8,6 +8,8 @@ import csv
 import logging
 import re
 import datetime
+import unicodedata
+from openpyxl import load_workbook
 from  dateutil.parser import parse
 import functions as f
 import data as d
@@ -39,18 +41,32 @@ Open a raw secondary PMI extract.
 Set up a csv parser for parsing it if appropriate.
     '''
 
+    d.secondaryIsCSV = False
+
     try:
-        d.sfr = open(d.secondaryFileName, 'rt')
+        if d.secondaryIsCSV:
+            d.sfr = open(d.secondaryFileName, 'rt')     # For CSV files
+        else:
+            d.swb = load_workbook(d.secondaryFileName)  # For Excel files
     except:
         logging.fatal('cannot open raw secondary PMI file (%s)', d.secondaryFileName)
         sys.exit(EX_NOINPUT)
-    sample = d.sfr.read(4096)
-    d.sfr.seek(0)
-    d.dialect = csv.Sniffer().sniff(sample)
-    d.dialect.skipinitialspace = False
-    d.dialect.doublequote = True
-    d.secondaryHasHeader = csv.Sniffer().has_header(sample)
-    d.secondaryIsCSV = True
+
+    if d.secondaryIsCSV:
+        # For CSV files
+        sample = d.sfr.read(4096)
+        d.sfr.seek(0)
+        d.dialect = csv.Sniffer().sniff(sample)
+        d.dialect.skipinitialspace = False
+        d.dialect.doublequote = True
+        d.secondaryHasHeader = csv.Sniffer().has_header(sample)
+    else:
+        # For Excel files
+        d.sws = d.swb.active
+        # d.sws = d.swb['Secondary PMI']
+        d.sws_iter_rows = d.sws.iter_rows()
+        d.secondaryHasHeader = 0
+
     return
 
 
@@ -58,7 +74,8 @@ def secondaryCloseRawPMI():
     '''
 Close the secondary raw PMI file
     '''
-    d.sfr.close()
+    if d.secondaryIsCSV:
+        d.sfr.close()       # For CSV files
     return
 
 
@@ -69,26 +86,54 @@ Read the next record of the raw PMI extract file.
 
     while True :        # Keep reading lines until we have something to return
         try:
-            line = d.sfr.readline()
+            if d.secondaryIsCSV:
+                line = d.sfr.readline()         # CSV file
+            else:
+                line = next(d.sws_iter_rows)    # Excel file
+        except StopIteration:
+            return False
         except:
             return False
-        if line == '':
-            return False
-        line = line.rstrip()
+        if d.secondaryIsCSV:
+            # For CSV files
+            if line == '':
+                return False
+            line = line.rstrip()
 
-        # Skip the heading of the secondary PMI extra file has one
-        if d.secondaryHasHeader:
-            d.secondaryHasHeader = False
-            continue
+            # Skip the heading of the secondary PMI extra file has one
+            if d.secondaryHasHeader:
+                d.secondaryHasHeader = False
+                continue
 
-        # Clean up the line if necessary
-        line = re.sub('[\x00-\x1F]', '', line)            # Unprintables
-        line = re.sub('[\x7F-\xFF]', '', line)            # Unprintables
+            # Clean up the line if necessary
+            nfkd_form = unicodedata.normalize('NFKD', line)
+            line = ''.join([c for c in nfkd_form if not unicodedata.combining(c)])
 
-        # Split into CSV fields
-        for row in csv.reader([line], d.dialect):
-            csvifields = row
-            break
+            # Split into CSV fields
+            for row in csv.reader([line], d.dialect):
+                csvifields = row
+                break
+        else:
+            # For Excel files
+            if d.secondaryHasHeader < 3:            # Skip multpile header lines
+                d.secondaryHasHeader += 1
+                continue
+            csvifields = []
+            if line[0].value is None:               # Skipp blank lines (usually at end of worksheet)
+                continue
+            for cell in line:
+                if cell.value is not None:
+                    if isinstance(cell.value, str):
+                        text = cell.value
+                        nfkd_form = unicodedata.normalize('NFKD', text)
+                        cleanText = ''.join([c for c in nfkd_form if not unicodedata.combining(c)])
+                        csvifields.append(cleanText)
+                    else:
+                        csvifields.append(str(cell.value))
+                else:
+                    csvifields.append('')
+            if len(csvifields) > d.secondaryFieldCount:     # Ignore extra columns
+                csvifields = csvifields[0:d.secondaryFieldCount]
 
         # Flag one more raw record read in
         d.secondaryRawRecNo += 1
@@ -130,7 +175,7 @@ Read the next record of the raw PMI extract file.
         # Check validity of the PID
         pid = secondaryCleanPID()
         if pid == '':
-            d.feCSV.writerow([f'MISSING {d.secondaryPIDname}'])
+            d.feCSV.writerow([f'MISSING {d.secondaryPIDname} - discarding record'])
             d.feCSV.writerow(d.csvfields)
             continue
 
@@ -140,7 +185,7 @@ Read the next record of the raw PMI extract file.
 
         # If the PID is a number, then intPID should be equal to pid, with any leading zeros stripped
         if intPID != re.sub('^0*', '', pid):
-            d.feCSV.writerow([f'NON NUMERIC {d.secondaryPIDname}'])
+            d.feCSV.writerow([f'NON NUMERIC {d.secondaryPIDname} - discarding record'])
             d.feCSV.writerow(d.csvfields)
             continue
         '''
@@ -148,17 +193,17 @@ Read the next record of the raw PMI extract file.
         # Check the validity of the UR value
         ur = secondaryCleanUR()
         if ur == '':
-            d.feCSV.writerow([f'MISSING {d.secondaryURname}'])
+            d.feCSV.writerow([f'MISSING {d.secondaryURname} - discarding record'])
             d.feCSV.writerow(d.csvfields)
             continue
 
         '''
         if len(ur) > 9:
-            d.feCSV.writerow([f'ILLEGALLY LONG {d.secondaryURname}'])
+            d.feCSV.writerow([f'ILLEGALLY LONG {d.secondaryURname} - discarding record'])
             d.feCSV.writerow(d.csvfields)
             continue
         if len(ur) < 9:
-            d.feCSV.writerow(['fILLEGALLY SHORT {d.secondaryURname}'])
+            d.feCSV.writerow(['fILLEGALLY SHORT {d.secondaryURname} - discarding record'])
             d.feCSV.writerow(d.csvfields)
             continue
         '''
@@ -169,7 +214,7 @@ Read the next record of the raw PMI extract file.
 
         # If the UR is a number, then intUR should be equal to ur, with any leading zeros stripped
         if intUR != re.sub('^0*', '', ur):
-            d.feCSV.writerow([f'NON NUMERIC {d.secondaryURname}'])
+            d.feCSV.writerow([f'NON NUMERIC {d.secondaryURname} - discarding record'])
             d.feCSV.writerow(d.csvfields)
             continue
         if intUR in d.URasIntRec:
@@ -183,7 +228,7 @@ Read the next record of the raw PMI extract file.
         # intAltUR = f.secondaryIntAltUR()                # Get the intAltUR number
 
         if thisAltUR == '' :                        # Check if blank
-            d.feCSV.writerow([f'Blank {d.secondaryAltURname} ({thisAltUR}) in record ({d.secondaryRawRecNo}) being ignored'])
+            d.feCSV.writerow([f'Blank/Missing {d.secondaryAltURname} in record ({d.secondaryRawRecNo}) being ignored'])
             d.noAltURcount += 1
         else :                                # Check if valid
             '''
@@ -350,7 +395,6 @@ This routine handles mismatches between the secondary PMI extra file format of a
     # Get the Birthdate from the secondary file
     dob = f.secondaryField('Birthdate')
     dob = re.sub(r'~', '', dob)    # This is mandatory
-    dob = re.sub(' .*', '', dob)    # Remove any potiential time value
 
     # Raw format is d[d]/m[m]/yyyy
     '''
@@ -367,6 +411,7 @@ This routine handles mismatches between the secondary PMI extra file format of a
     '''
 
     # Raw format is ISO 8601:YYYY-MM-DD
+    dob = re.sub('T.*', '', dob)    # Remove any potiential time value
     bits = re.split(r'-', dob)    # Split into day, month, year
     if len(bits) != 3 :        # Check for potentially invalid date
         return ''
@@ -379,12 +424,12 @@ This routine handles mismatches between the secondary PMI extra file format of a
 
     # Raw format is ISO 8601:YYYYMMDD
     '''
-    if len(dob) != 8:
+    if len(dob) < 8:
         return ''
     try:
         bYear = int(dob[0:4])
         bMonth = int(dob[4:6])
-        bDay = int(dob[6:])
+        bDay = int(dob[6:8])
     except:
         return ''
     '''

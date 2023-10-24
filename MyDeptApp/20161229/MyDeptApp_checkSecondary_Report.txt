@@ -2,10 +2,10 @@ Phase 0 Testing - secondary PMI checks
 _____ _ _______ _ _________ ___ ______
 MyDeptApp PMI Status Report
 _________ ___ ______ ______
-1807	Records Read In
+1805	Records Read In
 	[0 Alias records, 0 Merged records, 0 Deleted records]
-1807	Records Output for further testing (Deleted and bad records are not output)
-363	Records do not have a AltUR number
+1805	Records Output for further testing (Deleted and bad records are not output)
+361	Records do not have a AltUR number
 125	Records have a duplicate AltUR number
 32	Family name modified (for comparisions) (file MyDeptApp_FamilyNameCheck.xlsx)
-41	Probable duplicates [same name/dob/sex - different UR] (file MyDeptApp_ProbableDuplicates.xlsx)
+98	Probable duplicates [same name/dob/sex - different UR] (file MyDeptApp_ProbableDuplicates.xlsx)

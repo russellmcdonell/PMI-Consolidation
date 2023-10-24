@@ -7,9 +7,31 @@ import csv
 import logging
 import re
 import datetime
+import unicodedata
+from openpyxl import load_workbook
 from  dateutil.parser import parse
 import functions as f
 import data as d
+
+# This next section is plagurised from /usr/include/sysexits.h
+EX_OK = 0        # successful termination
+EX_WARN = 1        # non-fatal termination with warnings
+
+EX_USAGE = 64        # command line usage error
+EX_DATAERR = 65        # data format error
+EX_NOINPUT = 66        # cannot open input
+EX_NOUSER = 67        # addressee unknown
+EX_NOHOST = 68        # host name unknown
+EX_UNAVAILABLE = 69    # service unavailable
+EX_SOFTWARE = 70    # internal software error
+EX_OSERR = 71        # system error (e.g., can't fork)
+EX_OSFILE = 72        # critical OS file missing
+EX_CANTCREAT = 73    # can't create (user) output file
+EX_IOERR = 74        # input/output error
+EX_TEMPFAIL = 75    # temp failure; user is invited to retry
+EX_PROTOCOL = 76    # remote error in protocol
+EX_NOPERM = 77        # permission denied
+EX_CONFIG = 78        # configuration error
 
 def masterOpenRawPMI():
     '''
@@ -17,19 +39,30 @@ Open a raw master PMI extract.
 Set up a csv parser for parsing it if appropriate.
     '''
 
+    d.masterIsCSV = False
+
     try:
-        d.mfr = open(d.masterFileName, 'rt')
+        if d.masterIsCSV:
+            d.mfr = open(d.masterFileName, 'rt')        # For CSV files
+        else:
+            d.mwb = load_workbook(d.masterFileName)  # For Excel files
     except:
         logging.fatal('cannot open raw master PMI file (%s)', d.masterFileName)
-        sys.exit(1)
-    sample = d.mfr.read(4096)
-    d.mfr.seek(0)
-    d.dialect = csv.Sniffer().sniff(sample)
-    d.dialect.skipinitialspace = True
-    d.dialect.doublequote = True
-    d.masterHasHeader = csv.Sniffer().has_header(sample)
-    d.masterIsCSV = True
-    d.masterRawRecNo = 0
+        sys.exit(EX_NOINPUT)
+    if d.masterIsCSV:
+        # For CSV files
+        sample = d.mfr.read(4096)
+        d.mfr.seek(0)
+        d.dialect = csv.Sniffer().sniff(sample)
+        d.dialect.skipinitialspace = True
+        d.dialect.doublequote = True
+        d.masterHasHeader = csv.Sniffer().has_header(sample)
+    else:
+        # For Excel files
+        d.mws = d.mwb.active
+        # d.mws = d.mwb['Master PMI']
+        d.mws_iter_rows = d.mws.iter_rows()
+        d.masterHasHeader = 0
     return
 
 
@@ -37,7 +70,8 @@ def masterCloseRawPMI():
     '''
 Close the master raw PMI file
     '''
-    d.mfr.close()
+    if d.masterIsCSV:
+        d.mfr.close()       # For CSV files
     return
 
 
@@ -48,26 +82,55 @@ Read the next record of the raw PMI extract file.
 
     while True :        # Keep reading lines until we have something to return
         try:
-            line = d.mfr.readline()
+            if d.masterIsCSV:
+                line = d.mfr.readline()     # CSV file
+            else:
+                line = next(d.mws_iter_rows)    # Excel file
+        except StopIteration:
+            return False
         except:
             return False
-        if line == '':
-            return False
-        line = line.strip()
 
-        # Skip the heading of the master PMI extra file has one
-        if d.masterHasHeader:
-            d.masterHasHeader = False
-            continue
+        if d.masterIsCSV:
+            # For CSV files
+            if line == '':
+                return False
+            line = line.strip()
 
-        # Clean up the line if necessary
-        line = re.sub('[\x00-\x1F]', '', line)            # Unprintables
-        line = re.sub('[\x7F-\xFF]', '', line)            # Unprintables
+            # Skip the heading of the master PMI extra file has one
+            if d.masterHasHeader:
+                d.masterHasHeader = False
+                continue
 
-        # Split into CSV fields
-        for row in csv.reader([line], d.dialect):
-            csvifields = row
-            break
+            # Clean up the line if necessary
+            nfkd_form = unicodedata.normalize('NFKD', line)
+            line = ''.join([c for c in nfkd_form if not unicodedata.combining(c)])
+
+            # Split into CSV fields
+            for row in csv.reader([line], d.dialect):
+                csvifields = row
+                break
+        else:
+            # For Excel files
+            if d.masterHasHeader < 1:            # Skip header line
+                d.masterHasHeader += 1
+                continue
+            csvifields = []
+            if line[0].value is None:               # Skipp blank lines (usually at end of worksheet)
+                continue
+            for cell in line:
+                if cell.value is not None:
+                    if isinstance(cell.value, str):
+                        text = cell.value
+                        nfkd_form = unicodedata.normalize('NFKD', text)
+                        cleanText = ''.join([c for c in nfkd_form if not unicodedata.combining(c)])
+                        csvifields.append(cleanText)
+                    else:
+                        csvifields.append(str(cell.value))
+                else:
+                    csvifields.append('')
+            if len(csvifields) > d.masterFieldCount:     # Ignore extra columns
+                csvifields = csvifields[0:d.masterFieldCount]
 
         # Flag one more raw record read in
         d.masterRawRecNo += 1
@@ -96,8 +159,9 @@ Read the next record of the raw PMI extract file.
 
         # Now save any derived columns
         for i, col in enumerate(d.masterSaveColumns):
-            if col == -2 :         # Save a derived PID
-                value = d.mc.masterField('UR') + '^' + d.mc.masterField('Alias')
+            if col < -1 :         # Save a derived PID
+                # value = d.mc.masterField('UR') + '^' + d.mc.masterField('Alias')
+                value = ''
                 d.csvfields[i] = value
 
         # Check if deleted record
@@ -286,7 +350,6 @@ This routine handles mismatches between the master PMI extra file format of a da
     # Get the Birthdate from the master file
     dob = f.masterField('Birthdate')
     dob = re.sub(r'~', '', dob)    # This is mandatory
-    dob = re.sub(' .*', '', dob)    # Remove any potiential time value
 
     # Raw format is d[d]/m[m]/yyyy
     '''
@@ -303,6 +366,7 @@ This routine handles mismatches between the master PMI extra file format of a da
     '''
 
     # Raw format is ISO 8601:YYYY-MM-DD
+    dob = re.sub('T.*', '', dob)    # Remove any potiential time value
     bits = re.split(r'-', dob)    # Split into day, month, year
     if len(bits) != 3 :        # Check for potentially invalid date
         return ''
@@ -315,12 +379,12 @@ This routine handles mismatches between the master PMI extra file format of a da
 
     # Raw format is ISO 8601:YYYYMMDD
     '''
-    if len(dob) != 8:
+    if len(dob) < 8:
         return ''
     try:
         bYear = int(dob[0:4])
         bMonth = int(dob[4:6])
-        bDay = int(dob[6:])
+        bDay = int(dob[6:8])
     except:
         return ''
     '''
