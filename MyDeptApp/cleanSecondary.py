@@ -259,9 +259,9 @@ Read the next record of the raw PMI extract file.
 
         # Some tests for family names and given names that imply that the current record is not a valid record
         # Checks for family names that imply skip this record
+        r'''
         familyName = f.secondaryField('FamilyName')
         givenName = f.secondaryField('GivenName')
-        '''
         if re.search('^REF*ER [TUR]', familyName, flags=re.IGNORECASE) is not None:
             d.feCSV.writerow(['REFER TO PATIENT'])
             d.feCSV.writerow(d.csvfields)
@@ -397,7 +397,7 @@ This routine handles mismatches between the secondary PMI extra file format of a
     dob = re.sub(r'~', '', dob)    # This is mandatory
 
     # Raw format is d[d]/m[m]/yyyy
-    '''
+    r'''
     dob = re.sub(r' .*', '', dob)    # Remove any potiential time value
     bits = re.split(r'\/', dob)    # Split into day, month, year
     if len(bits) != 3 :        # Check for potentially invalid date
